@@ -6,7 +6,7 @@ _M.default_ctr = "home"
 _M.default_func = "index"
 
 -- fastdfs
-_M.tracker_host = "192.168.18.183"
+_M.tracker_host = "192.168.1.180"
 _M.tracker_port = 22122
 
 -- form upload

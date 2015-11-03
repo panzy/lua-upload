@@ -1,0 +1,17 @@
+这个 Lua 程序运行在 OpenResty 中，用于向 FastDFS 上传图片。
+
+Requirements
+============
+
+* fastdfs [ https://github.com/happyfish100/fastdfs ]
+* OpenResty [ https://openresty.org/ ]
+* lua-resty-fastdfs [ https://github.com/azurewang/lua-resty-fastdfs ]
+
+How to run this app
+===================
+
+$ mkdir logs
+$ sudo /usr/local/openresty/nginx/sbin/nginx -p `pwd` -c nginx.conf
+
+visit http://localhost:8080/
+
