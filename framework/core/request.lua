@@ -19,58 +19,7 @@ local function getextension(filename)
 	return filename:match(".+%.(%w+)$")
 end
 
-local function _multipart_formdata(self)
-	local form, err = upload:new(chunk_size)
-	if not form then
-		ngx.log(ngx.ERR, "failed to new upload ", err)
-		ngx.exit(500)
-	end
-	form:set_timeout(recieve_timeout)
-	
-	local filename,content
-	while true do
-		local typ, res, err = form:read()
-		if not typ then
-			ngx.say("failed to read: ", err)
-			return
-		end
-		
-		if typ == "header" then
-			if res[1] == "Content-Disposition" then
-				key = match(res[2], "name=\"(.-)\"")
-				filename = match(res[2], "filename=\"(.-)\"")
-
-			elseif res[1] == "Content-Type" then
-				filetype = res[2]
-			end
-			
-			if filename and filetype then
-				if not self.extname then
-					self.extname = getextension(filename)
-				end
-				value = "userdata"
-			end
-	
-		elseif typ == "body" then
-			if value == "userdata" then
-				if content == nil then
-					content = res
-				else
-					content = content .. res
-				end
-			end
-			
-		--elseif typ == "part_end" then
-
-		elseif typ == "eof" then
-			--self.send_fastdfs(content, self.extname)
-			break
-		end
-	end
-	return content
-end
-
-local function send_fastdfs(blob, ext)
+local function init_storage()
 	local tk = tracker:new()
 	tk:set_timeout(recieve_timeout)
 	tk:connect({host = tracker_host, port = tracker_port})
@@ -87,15 +36,79 @@ local function send_fastdfs(blob, ext)
 		ngx.say("connect storage error:" .. err)
 		ngx.exit(200)
 	end
-	local result, err = st:upload_appender_by_buff(blob, ext)
-	if not result then
-		ngx.say("upload error:" .. err)
-		ngx.exit(200)
+    return st
+end
+
+-- return url of the uploaded file, or nil if failed.
+local function _multipart_formdata(self)
+	local form, err = upload:new(chunk_size)
+	if not form then
+		ngx.log(ngx.ERR, "failed to new upload ", err)
+		ngx.exit(500)
 	end
-	--local ip = { group1 = 107, group2 = 108}
-	--local redirect_url = 'http://192.168.18.' .. ip[result.group_name] .. '/' .. result.group_name .. '/' .. result.file_name
-	local redirect_url = '/' .. result.group_name .. '/' .. result.file_name
-	return redirect_url
+	form:set_timeout(recieve_timeout)
+	
+	local fieldname, filename,content
+    local st = init_storage()
+    local upload_result
+
+	while true do
+		local typ, res, err = form:read()
+		if not typ then
+			ngx.say("failed to read: ", err)
+			return
+		end
+		
+        --ngx.log(ngx.INFO, 'resty.upload:read() => ' .. typ)
+
+		if typ == "header" then
+            -- read() returns: 'header', {key, value, line}
+            --ngx.log(ngx.INFO, 'header ' .. res[1] .. ' => ' .. res[3])
+
+			if res[1] == "Content-Disposition" then
+				fieldname = match(res[2], "name=\"(.-)\"")
+				filename = match(res[2], "filename=\"(.-)\"")
+			elseif res[1] == "Content-Type" then
+				filetype = res[2]
+			end
+			
+			if filename and filetype then
+				if not self.extname then
+					self.extname = getextension(filename)
+				end
+			end
+	
+		elseif typ == "body" then
+			if fieldname == "file" then
+                if not upload_result then
+                    --ngx.log(ngx.INFO, 'init uploading ' .. self.extname)
+                    upload_result, err = st:upload_appender_by_buff(res, self.extname)
+                    if not upload_result then
+                        ngx.say("upload(init) error: " .. err)
+                        ngx.exit(200)
+                    end
+                else
+                    --ngx.log(ngx.INFO, 'append to /' .. upload_result.group_name .. '/' .. upload_result.file_name)
+                    local append_result, err = st:append_by_buff(upload_result.group_name, upload_result.file_name, res)
+                    if not append_result then
+                        ngx.say("upload(append) error: " .. err)
+                        ngx.exit(200)
+                    end
+                end
+			end
+			
+		--elseif typ == "part_end" then
+
+		elseif typ == "eof" then
+			--self.send_fastdfs(content, self.extname)
+			break
+		end
+	end
+
+    if upload_result then
+        return '/' .. upload_result.group_name .. '/' .. upload_result.file_name
+    end
+    return nil
 end
 
 local function headers(self, key)
@@ -119,8 +132,7 @@ local function _check_post(self)
             content = _save_raw_file(self)
 		else
 			-- multipart/form-data
-			content = _multipart_formdata(self)
-			res = send_fastdfs(content, self.extname)
+			res = _multipart_formdata(self)
 		end
 	end
 	return res
