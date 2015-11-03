@@ -95,6 +95,19 @@ local function _multipart_formdata(self)
                         ngx.exit(200)
                     end
                 end
+            elseif fieldname == 'append' then
+                -- `append` = group1/M00/00/02/wKgBtFY4gLGENVe2AAAAAFqCAvc165.txt
+                ngx.log(ngx.INFO, 'append to ' .. res)
+                if not upload_result then
+                    local a = match(res, '^([^/]+)') -- group
+                    local b = match(res, '^[^/]+/(.+)') -- file
+                    if a and b then
+                        upload_result = {}
+                        upload_result.group_name = a
+                        upload_result.file_name = b
+                        ngx.log(ngx.INFO, 'append to group ' .. a .. ', file ' .. b)
+                    end
+                end
 			end
 			
 		--elseif typ == "part_end" then

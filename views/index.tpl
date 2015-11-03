@@ -8,8 +8,7 @@
 <body>
 <h1>测试页面</h1>
 <form action="/upload/background" method="post" enctype="multipart/form-data">
-    uid: <input type="text" name="uid" />
-    status: <input type="text" name="status" />
+    append: <input type="text" name="append" />
     <input type="file" name="file" />
     <input type="submit" name="submit" value="提交" />
 </form>
