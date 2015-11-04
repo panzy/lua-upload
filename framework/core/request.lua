@@ -1,111 +1,119 @@
 -- Copyright (C) xing_lao
+--
+-- Upload request handler.
+
+local resty_upload = require 'resty.upload'
 local config = require "core.config"
-local upload = require "resty.upload"
 local tracker = require "resty.fastdfs.tracker"
 local storage = require "resty.fastdfs.storage"
-local _M = { _VERSION = '0.01'}
 
-local match = string.match
-local ngx_var = ngx.var
-local get_headers = ngx.req.get_headers
-local chunk_size = config.chunk_size
+-- prototype of request handler.
+local Request = { _VERSION = '0.01' }
+
 local recieve_timeout = config.connect_timeout
-local tracker_host = config.tracker_host
-local tracker_port = config.tracker_port
-
-local mt = { __index = _M }
 
 local function getextension(filename)
 	return filename:match(".+%.(%w+)$")
 end
 
+-- Find a FastDFS storage and connect to it, 
+-- return resty.fastdfs.storage.
 local function init_storage()
 	local tk = tracker:new()
 	tk:set_timeout(recieve_timeout)
-	tk:connect({host = tracker_host, port = tracker_port})
+	tk:connect({host = config.tracker_host, port = config.tracker_port})
 	local res, err = tk:query_storage_store()
 	if not res then
-		ngx.say("query storage error:" .. err)
-		ngx.exit(200)
+		ngx.log(ngx.ERR, "query storage error:" .. err)
+        return
 	end
 	
 	local st = storage:new()
 	st:set_timeout(recieve_timeout)
 	local ok, err = st:connect(res)
 	if not ok then
-		ngx.say("connect storage error:" .. err)
-		ngx.exit(200)
+		ngx.log(ngx.ERR, "connect storage error:" .. err)
+        return
 	end
     return st
 end
 
--- return url of the uploaded file, or nil if failed.
-local function _multipart_formdata(self)
-	local form, err = upload:new(chunk_size)
+-- Do the uploading work with multipart/form-data,
+-- return { http-status, content }.
+local function handle_multipart_formdata(self)
+	local form, err = resty_upload:new(config.chunk_size)
 	if not form then
-		ngx.log(ngx.ERR, "failed to new upload ", err)
-		ngx.exit(500)
+        return 500, err
 	end
 	form:set_timeout(recieve_timeout)
 	
-	local fieldname, filename,content
-    local st = init_storage()
+	local fieldname
     local upload_result
+    local st = init_storage()
+
+    if not st then
+        return 500, 'cannot to connect to file storage service'
+    end
 
 	while true do
 		local typ, res, err = form:read()
 		if not typ then
-			ngx.say("failed to read: ", err)
-			return
+			return 500, 'failed to read: ' .. err
 		end
 		
-        --ngx.log(ngx.INFO, 'resty.upload:read() => ' .. typ)
+        -- ngx.log(ngx.INFO, 'resty.upload:read() => ' .. typ)
 
 		if typ == "header" then
             -- read() returns: 'header', {key, value, line}
-            --ngx.log(ngx.INFO, 'header ' .. res[1] .. ' => ' .. res[3])
+            -- ngx.log(ngx.INFO, 'header ' .. res[1] .. ' => ' .. res[3])
 
+            -- request payload sample
+            --
+            -- ------WebKitFormBoundaryXBSGBsBFhERUhA08
+            -- Content-Disposition: form-data; name="append"
+            --
+            -- ------WebKitFormBoundaryXBSGBsBFhERUhA08
+            -- Content-Disposition: form-data; name="file"; filename="456.txt"
+            -- Content-Type: text/plain
+            
 			if res[1] == "Content-Disposition" then
-				fieldname = match(res[2], "name=\"(.-)\"")
-				filename = match(res[2], "filename=\"(.-)\"")
-			elseif res[1] == "Content-Type" then
-				filetype = res[2]
+				fieldname = res[2]:match('name="(%a*)"')
+                -- ngx.log(ngx.INFO, 'field name: ' .. fieldname)
+
+                -- extract file extension
+                if fieldname == 'file' then
+                    local filename = res[2]:match('filename="([^%"]*)"')
+                    if filename then
+                        self.extname = getextension(filename)
+                    end
+                end
 			end
 			
-			if filename and filetype then
-				if not self.extname then
-					self.extname = getextension(filename)
-				end
-			end
-	
-		elseif typ == "body" then
+		elseif typ == "body" then -- got value of current post field
 			if fieldname == "file" then
                 if not upload_result then
-                    --ngx.log(ngx.INFO, 'init uploading ' .. self.extname)
+                    -- ngx.log(ngx.INFO, 'init uploading ' .. self.extname)
                     upload_result, err = st:upload_appender_by_buff(res, self.extname)
                     if not upload_result then
-                        ngx.say("upload(init) error: " .. err)
-                        ngx.exit(200)
+                        return 500, "upload(init) error: " .. err
                     end
                 else
                     --ngx.log(ngx.INFO, 'append to /' .. upload_result.group_name .. '/' .. upload_result.file_name)
                     local append_result, err = st:append_by_buff(upload_result.group_name, upload_result.file_name, res)
                     if not append_result then
-                        ngx.say("upload(append) error: " .. err)
-                        ngx.exit(200)
+                        return 500, "upload(append) error: " .. err
                     end
                 end
             elseif fieldname == 'append' then
                 -- `append` = group1/M00/00/02/wKgBtFY4gLGENVe2AAAAAFqCAvc165.txt
-                ngx.log(ngx.INFO, 'append to ' .. res)
-                if not upload_result then
-                    local a = match(res, '^([^/]+)') -- group
-                    local b = match(res, '^[^/]+/(.+)') -- file
-                    if a and b then
-                        upload_result = {}
-                        upload_result.group_name = a
-                        upload_result.file_name = b
-                        ngx.log(ngx.INFO, 'append to group ' .. a .. ', file ' .. b)
+                if res then
+                    ngx.log(ngx.INFO, 'append to ' .. res)
+                    if not upload_result then
+                        _, _, group, file = res:find('^(group%d+)/(.+)$')
+                        if group and file then
+                            upload_result = { group_name = group, file_name = file }
+                            ngx.log(ngx.INFO, 'append to group ' .. group .. ', file ' .. file)
+                        end
                     end
                 end
 			end
@@ -113,20 +121,20 @@ local function _multipart_formdata(self)
 		--elseif typ == "part_end" then
 
 		elseif typ == "eof" then
-			--self.send_fastdfs(content, self.extname)
 			break
 		end
 	end
 
     if upload_result then
-        return '/' .. upload_result.group_name .. '/' .. upload_result.file_name
+        return 302, '/' .. upload_result.group_name .. '/' .. upload_result.file_name
+    else
+        return 500, 'unknown error'
     end
-    return nil
 end
 
 local function headers(self, key)
     if not self.header_vars then
-        self.header_vars = get_headers()
+        self.header_vars = ngx.req.get_headers()
     end
 
     if key then
@@ -135,33 +143,37 @@ local function headers(self, key)
         return self.header_vars
     end
 end
-_M.headers = headers
 
-local function _check_post(self)
-	if ngx_var.request_method == "POST" then
+-- Do the posting.
+--
+-- Return { http-status, content }, on success, this would be { 302, <url> },
+-- otherwise, the content would be error message.
+function Request:post()
+	if ngx.var.request_method == 'POST' then
 		local header = headers(self, 'Content-Type')
-		--ngx.say(header)
-		if header == "application/octet-stream" then
-            content = _save_raw_file(self)
-		else
-			-- multipart/form-data
-			res = _multipart_formdata(self)
+        if not header then
+            return 400, 'Content-Type header not set.'
+        end
+        -- content type sample:
+        -- Content-Type: multipart/form-data; boundary=----WebKitFormBoundaryEt59FqhmJ380W0Rf
+        ct = header:match('([^;]*)')
+		ngx.log(ngx.INFO, 'Content-Type: ' .. ct)
+		if ct == 'multipart/form-data' then
+			return handle_multipart_formdata(self)
+        else
+            return 400, 'Content-Type ' .. ct .. ' is not supported.'
 		end
+    else
+        return 501, 'HTTP_METHOD_NOT_IMPLEMENTED'
 	end
-	return res
 end
 
-function _M.new(self)
-	local res = {
+function Request:new()
+	local obj = {
 		header_vars = nil
 	}
-	return setmetatable(res, mt)
+
+	return setmetatable(obj, { __index = Request })
 end
 
-local function post(self)
-	local res = _check_post(self)
-	return res
-end
-_M.post = post
-
-return _M
+return Request

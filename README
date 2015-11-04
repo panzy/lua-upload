@@ -13,5 +13,9 @@ How to run this app
 $ mkdir logs
 $ sudo /usr/local/openresty/nginx/sbin/nginx -p `pwd` -c nginx.conf
 
-visit http://localhost:8080/
+测试页面：
+http://localhost:8080/
+
+也可以用 curl 测试：
+$ curl -v -F "file=@a.jpg" localhost:8080/upload/background
 
