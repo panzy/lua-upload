@@ -38,9 +38,19 @@ local function init_storage()
     return st
 end
 
+local function build_upload_result_from_path(path)
+    _, _, group, file = path:find('^/?(group%d+)/(.+)$')
+    if group and file then
+        ngx.log(ngx.INFO, 'append to ' .. group .. ':' .. file)
+        return { group_name = group, file_name = file }
+    else
+        return nil
+    end
+end
+
 -- Do the uploading work with multipart/form-data,
 -- return { http-status, content }.
-local function handle_multipart_formdata(self)
+local function handle_multipart_formdata(self, path)
 	local form, err = resty_upload:new(config.chunk_size)
 	if not form then
         return 500, err
@@ -53,6 +63,10 @@ local function handle_multipart_formdata(self)
 
     if not st then
         return 500, 'cannot to connect to file storage service'
+    end
+
+    if path then
+        upload_result = build_upload_result_from_path(path)
     end
 
 	while true do
@@ -109,11 +123,7 @@ local function handle_multipart_formdata(self)
                 if res then
                     ngx.log(ngx.INFO, 'append to ' .. res)
                     if not upload_result then
-                        _, _, group, file = res:find('^(group%d+)/(.+)$')
-                        if group and file then
-                            upload_result = { group_name = group, file_name = file }
-                            ngx.log(ngx.INFO, 'append to group ' .. group .. ', file ' .. file)
-                        end
+                        upload_result = build_upload_result_from_path(res)
                     end
                 end
 			end
@@ -148,8 +158,8 @@ end
 --
 -- Return { http-status, content }, on success, this would be { 302, <url> },
 -- otherwise, the content would be error message.
-function Request:post()
-	if ngx.var.request_method == 'POST' then
+function Request:post(path)
+	if ngx.req.get_method() == 'POST' then
 		local header = headers(self, 'Content-Type')
         if not header then
             return 400, 'Content-Type header not set.'
@@ -159,7 +169,7 @@ function Request:post()
         ct = header:match('([^;]*)')
 		ngx.log(ngx.INFO, 'Content-Type: ' .. ct)
 		if ct == 'multipart/form-data' then
-			return handle_multipart_formdata(self)
+			return handle_multipart_formdata(self, path)
         else
             return 400, 'Content-Type ' .. ct .. ' is not supported.'
 		end

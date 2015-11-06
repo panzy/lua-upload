@@ -4,8 +4,16 @@ Requirements
 ============
 
 * fastdfs [ https://github.com/happyfish100/fastdfs ]
+* lua 5.1
 * OpenResty [ https://openresty.org/ ]
 * lua-resty-fastdfs [ https://github.com/azurewang/lua-resty-fastdfs ]
+* ImageMagick [ https://github.com/leafo/magick ] required by thumb
+
+
+  Here's how to install magick on Fedora Linux:
+
+  $ sudo dnf install ImageMagick-devel
+  $ wget https://raw.githubusercontent.com/leafo/magick/master/magick/init.lua -O framework/magick.lua
 
 How to run this app
 ===================
@@ -13,9 +21,21 @@ How to run this app
 $ mkdir logs
 $ sudo /usr/local/openresty/nginx/sbin/nginx -p `pwd` -c nginx.conf
 
-测试页面：
-http://localhost:8080/
 
-也可以用 curl 测试：
-$ curl -v -F "file=@a.jpg" localhost:8080/upload/background
+To upload, visit this page
+
+  http://localhost:8080/
+
+or use curl:
+
+  $ curl -v -0 -F "file=@123.txt" localhost:8080/upload
+
+
+Appending is supported:
+
+  $ curl -v -0 -F "file=@456.txt" localhost:8080/upload/group1/M00/00/02/wKgBtFY8BW2ETBr0AAAAAFqCAvc159.txt
+
+  or
+
+  $ curl -v -0 -F "append=group1/M00/00/02/wKgBtFY8BW2ETBr0AAAAAFqCAvc159.txt" -F "file=@456.txt" localhost:8080/upload
 
