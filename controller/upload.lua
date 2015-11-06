@@ -36,7 +36,8 @@ function append()
 
     i, _ = path:find('/group')
     if i then
-        path = path:sub(i)
+        post_to(path:sub(i))
+    else
+        post_to(nil)
     end
-    post_to(path)
 end

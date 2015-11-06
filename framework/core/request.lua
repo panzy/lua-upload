@@ -48,9 +48,66 @@ local function build_upload_result_from_path(path)
     end
 end
 
+-- Send data to FastDFS
+--
+-- return { http-status, msg }
+local function send_data(self, st, data) 
+    if not self.upload_result then
+        --ngx.log(ngx.INFO, 'init uploading ' .. self.extname)
+        self.upload_result, err = st:upload_appender_by_buff(data, self.extname)
+        if not self.upload_result then
+            return 500, "upload(init) error: " .. err
+        end
+    else
+        --ngx.log(ngx.INFO, 'append to /' .. upload_result.group_name .. '/' .. upload_result.file_name)
+        local append_result, err = st:append_by_buff(
+            self.upload_result.group_name, self.upload_result.file_name, data)
+        if not append_result then
+            return 500, "upload(append) error: " .. err
+        end
+    end
+
+    return 200, nil
+end
+
+local function handle_octet_stream(self)
+    if self.upload_result then
+        self.extname = getextension(self.upload_result.file_name)
+    else
+        self.extname = ngx.req.get_headers()['ext']
+        if not self.extname then
+            return 400, 'require "ext" header for non-appending '..ct
+        end
+    end
+
+    local sock, err = ngx.req.socket()
+    sock:settimeout(3000)
+
+    local st = init_storage()
+    while true do
+        data, err, partial = sock:receive(config.chunk_size)
+        if data or partial then
+            local status, err = send_data(self, st, data or partial)
+            if not status == 200 then
+                return status, err
+            end
+        else
+            break
+        end
+
+        if err == 'closed' then break end
+    end
+
+    if self.upload_result then
+        return 302, '/'..self.upload_result.group_name..'/'..self.upload_result.file_name
+    else
+        return 500, 'failed to upload'
+    end
+end
+
 -- Do the uploading work with multipart/form-data,
 -- return { http-status, content }.
-local function handle_multipart_formdata(self, path)
+local function handle_multipart_formdata(self)
 	local form, err = resty_upload:new(config.chunk_size)
 	if not form then
         return 500, err
@@ -58,15 +115,10 @@ local function handle_multipart_formdata(self, path)
 	form:set_timeout(recieve_timeout)
 	
 	local fieldname
-    local upload_result
     local st = init_storage()
 
     if not st then
         return 500, 'cannot to connect to file storage service'
-    end
-
-    if path then
-        upload_result = build_upload_result_from_path(path)
     end
 
 	while true do
@@ -105,25 +157,16 @@ local function handle_multipart_formdata(self, path)
 			
 		elseif typ == "body" then -- got value of current post field
 			if fieldname == "file" then
-                if not upload_result then
-                    -- ngx.log(ngx.INFO, 'init uploading ' .. self.extname)
-                    upload_result, err = st:upload_appender_by_buff(res, self.extname)
-                    if not upload_result then
-                        return 500, "upload(init) error: " .. err
-                    end
-                else
-                    --ngx.log(ngx.INFO, 'append to /' .. upload_result.group_name .. '/' .. upload_result.file_name)
-                    local append_result, err = st:append_by_buff(upload_result.group_name, upload_result.file_name, res)
-                    if not append_result then
-                        return 500, "upload(append) error: " .. err
-                    end
+                local status, err = send_data(self, st, res)
+                if not status == 200 then
+                    return status, err
                 end
             elseif fieldname == 'append' then
                 -- `append` = group1/M00/00/02/wKgBtFY4gLGENVe2AAAAAFqCAvc165.txt
                 if res then
                     ngx.log(ngx.INFO, 'append to ' .. res)
-                    if not upload_result then
-                        upload_result = build_upload_result_from_path(res)
+                    if not self.upload_result then
+                        self.upload_result = build_upload_result_from_path(res)
                     end
                 end
 			end
@@ -135,8 +178,8 @@ local function handle_multipart_formdata(self, path)
 		end
 	end
 
-    if upload_result then
-        return 302, '/' .. upload_result.group_name .. '/' .. upload_result.file_name
+    if self.upload_result then
+        return 302, '/' .. self.upload_result.group_name .. '/' .. self.upload_result.file_name
     else
         return 500, 'unknown error'
     end
@@ -159,17 +202,26 @@ end
 -- Return { http-status, content }, on success, this would be { 302, <url> },
 -- otherwise, the content would be error message.
 function Request:post(path)
+
 	if ngx.req.get_method() == 'POST' then
 		local header = headers(self, 'Content-Type')
         if not header then
             return 400, 'Content-Type header not set.'
         end
+
+        if path then
+            self.upload_result = build_upload_result_from_path(path)
+        end
+
         -- content type sample:
         -- Content-Type: multipart/form-data; boundary=----WebKitFormBoundaryEt59FqhmJ380W0Rf
         ct = header:match('([^;]*)')
 		ngx.log(ngx.INFO, 'Content-Type: ' .. ct)
+
 		if ct == 'multipart/form-data' then
 			return handle_multipart_formdata(self, path)
+        elseif ct == 'application/octet-stream' then
+            return handle_octet_stream(self)
         else
             return 400, 'Content-Type ' .. ct .. ' is not supported.'
 		end
@@ -180,7 +232,9 @@ end
 
 function Request:new()
 	local obj = {
-		header_vars = nil
+		header_vars = nil,
+        upload_result = nil,
+        extname = nil
 	}
 
 	return setmetatable(obj, { __index = Request })

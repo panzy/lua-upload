@@ -1,4 +1,5 @@
-这个 Lua 程序运行在 OpenResty 中，用于向 FastDFS 上传图片。
+This Lua application runs in OpenResty, letting you upload data to FastDFS.
+
 
 Requirements
 ============
@@ -10,10 +11,11 @@ Requirements
 * ImageMagick [ https://github.com/leafo/magick ] required by thumb
 
 
-  Here's how to install magick on Fedora Linux:
+    Here's how to install magick on Fedora Linux:
 
-  $ sudo dnf install ImageMagick-devel
-  $ wget https://raw.githubusercontent.com/leafo/magick/master/magick/init.lua -O framework/magick.lua
+    $ sudo dnf install ImageMagick-devel
+    $ wget https://raw.githubusercontent.com/leafo/magick/master/magick/init.lua -O framework/magick.lua
+
 
 How to run this app
 ===================
@@ -24,18 +26,59 @@ $ sudo /usr/local/openresty/nginx/sbin/nginx -p `pwd` -c nginx.conf
 
 To upload, visit this page
 
-  http://localhost:8080/
+    http://localhost:8080/
 
 or use curl:
 
-  $ curl -v -0 -F "file=@123.txt" localhost:8080/upload
+    $ curl -v -0 -F "file=@123.txt" localhost:8080/upload
 
 
-Appending is supported:
+Uploading API
+-------------
 
-  $ curl -v -0 -F "file=@456.txt" localhost:8080/upload/group1/M00/00/02/wKgBtFY8BW2ETBr0AAAAAFqCAvc159.txt
+URL
 
-  or
+    http://localhost:8080/upload[<path>]
 
-  $ curl -v -0 -F "append=group1/M00/00/02/wKgBtFY8BW2ETBr0AAAAAFqCAvc159.txt" -F "file=@456.txt" localhost:8080/upload
+    * <path> is for appending data to existing file, e.g., 
+
+        /group1/M00/00/02/wKgBtFY8BW2ETBr0AAAAAFqCAvc159.txt
+
+Request Method
+
+    POST
+
+Accepted Headers
+
+    * Content-Type
+        - multipart/form-data
+        - application/octet-stream
+    * ext:<file-extension>
+
+
+Example
+
+    upload file "123.txt"
+    $ curl -v -0 -F "file=@123.txt" localhost:8080/upload
+
+    append file "456.txt" to a existing file
+    $ curl -v -0 -F "file=@456.txt" localhost:8080/upload/group1/M00/00/02/wKgBtFY8BW2ETBr0AAAAAFqCAvc159.txt
+
+    upload file "xaa.jpg" as octet stream, ext header is required
+    $ curl -v -0 -H 'ext:jpg' -H 'Content-Type:application/octet-stream' --data-binary "@xaa.jpg" localhost:8080/upload
+
+    append file "xab.jpg" as octet stream to a existing file, ext header is not required
+    $ curl -v -0 -H 'Content-Type:application/octet-stream' --data-binary "@xab.jpg" localhost:8080/upload/group1/M00/00/02/wKgBtFY8XL-EO6A5AAAAAK6F1KI533.jpg
+
+
+Downloading API
+---------------
+
+URL
+
+    http://localhost:8080/<group-name>/<file-name>
+
+Example
+
+    http://localhost:8080/group1/M00/00/02/wKgBtFY8BW2ETBr0AAAAAFqCAvc159.txt
 
