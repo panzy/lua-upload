@@ -7,7 +7,7 @@ Requirements
 * fastdfs [ https://github.com/happyfish100/fastdfs ]
 * lua 5.1
 * OpenResty [ https://openresty.org/ ]
-* lua-resty-fastdfs [ https://github.com/azurewang/lua-resty-fastdfs ]
+* lua-resty-fastdfs [ https://github.com/panzy/lua-resty-fastdfs ]
 * ImageMagick [ https://github.com/leafo/magick ] required by thumb
 
 
@@ -81,4 +81,23 @@ URL
 Example
 
     http://localhost:8080/group1/M00/00/02/wKgBtFY8BW2ETBr0AAAAAFqCAvc159.txt
+
+
+Querying API
+------------
+
+URL
+
+    http://localhost:8080/query/<group-name>/<file-name>
+
+Example
+
+    http://localhost:8080/query/group1/M00/00/02/wKgBtFY8BW2ETBr0AAAAAFqCAvc159.txt
+
+Response
+
+    {"create_timestamp":1446788879,"crc32":1518469879,"file_size":52,"source_ip_addr":"192.168.1.180"}
+
+    
+    
 

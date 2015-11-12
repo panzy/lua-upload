@@ -230,6 +230,36 @@ function Request:post(path)
 	end
 end
 
+function Request:query_file_info(fileid)
+    -- init tracker
+	local tk = tracker:new()
+	tk:set_timeout(recieve_timeout)
+	tk:connect({host = config.tracker_host, port = config.tracker_port})
+
+    -- query fetch storage
+	local res, err = tk:query_storage_fetch1(fileid)
+    if not res then
+		ngx.log(ngx.ERR, "query fetch storage error:" .. err)
+        return 500
+    end
+
+	local st = storage:new()
+	st:set_timeout(recieve_timeout)
+	local ok, err = st:connect(res)
+	if not ok then
+		ngx.log(ngx.ERR, "connect storage error:" .. err)
+        return 500
+	end
+
+    local info, err = st:query_file_info(fileid)
+    if not info then
+		ngx.log(ngx.ERR, "failed to query file info:" .. err)
+        return 404
+    end
+
+    return 200, info
+end
+
 function Request:new()
 	local obj = {
 		header_vars = nil,
