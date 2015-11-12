@@ -55,11 +55,16 @@ Accepted Headers
         - application/octet-stream
     * ext:<file-extension>
 
+Response
+
+    file id
 
 Example
 
     upload file "123.txt"
     $ curl -v -0 -F "file=@123.txt" localhost:8080/upload
+    On success, the response will be file id, e.g.,
+    group1/M00/00/03/wKgBtFZFRs-EWHbPAAAAAIad-B8315.txt
 
     append file "456.txt" to a existing file
     $ curl -v -0 -F "file=@456.txt" localhost:8080/upload/group1/M00/00/02/wKgBtFY8BW2ETBr0AAAAAFqCAvc159.txt
@@ -69,6 +74,9 @@ Example
 
     append file "xab.jpg" as octet stream to a existing file, ext header is not required
     $ curl -v -0 -H 'Content-Type:application/octet-stream' --data-binary "@xab.jpg" localhost:8080/upload/group1/M00/00/02/wKgBtFY8XL-EO6A5AAAAAK6F1KI533.jpg
+
+
+It's possible for clients to get file id while the uploading is still in progress, see test/full-duplex/java.
 
 
 Downloading API

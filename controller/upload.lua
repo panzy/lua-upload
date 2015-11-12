@@ -2,14 +2,22 @@
 
 local function post_to(path)
 	local request = get_instance().request
-	status, res = request:post(path)
 
-    if status == 302 then
-        ngx.redirect(res)
+    co = coroutine.create(function(path)
+        return request:post(path)
+    end)
+
+    local ok, status, res = coroutine.resume(co, path)
+
+    ngx.log(ngx.INFO, 'coroutine yielded: ', ok, ' ', status, ' ', res)
+    if ok then
+        ngx.status = status
+        ngx.say(res)
+        ngx.flush()
+        ok, status, res = coroutine.resume(co, status, res)
     else
         ngx.status = status
         ngx.say(res)
-        ngx.exit(ngx.HTTP_OK)
     end
 end
 

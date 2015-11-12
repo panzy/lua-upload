@@ -58,8 +58,11 @@ local function send_data(self, st, data)
         if not self.upload_result then
             return 500, "upload(init) error: " .. err
         end
+
+        -- yield file id, so that the client can get it while the uploading is still in progress.
+        return coroutine.yield(200, self.upload_result.group_name..'/'..self.upload_result.file_name)
     else
-        --ngx.log(ngx.INFO, 'append to /' .. upload_result.group_name .. '/' .. upload_result.file_name)
+        --ngx.log(ngx.INFO, 'append to /', self.upload_result.group_name, '/', self.upload_result.file_name)
         local append_result, err = st:append_by_buff(
             self.upload_result.group_name, self.upload_result.file_name, data)
         if not append_result then
@@ -99,7 +102,7 @@ local function handle_octet_stream(self)
     end
 
     if self.upload_result then
-        return 302, '/'..self.upload_result.group_name..'/'..self.upload_result.file_name
+        return 200, self.upload_result.group_name..'/'..self.upload_result.file_name
     else
         return 500, 'failed to upload'
     end
@@ -179,7 +182,7 @@ local function handle_multipart_formdata(self)
 	end
 
     if self.upload_result then
-        return 302, '/' .. self.upload_result.group_name .. '/' .. self.upload_result.file_name
+        return 200, self.upload_result.group_name .. '/' .. self.upload_result.file_name
     else
         return 500, 'unknown error'
     end
@@ -199,7 +202,7 @@ end
 
 -- Do the posting.
 --
--- Return { http-status, content }, on success, this would be { 302, <url> },
+-- Return { http-status, content }, on success, this would be { 200, <fileid> },
 -- otherwise, the content would be error message.
 function Request:post(path)
 
@@ -216,7 +219,7 @@ function Request:post(path)
         -- content type sample:
         -- Content-Type: multipart/form-data; boundary=----WebKitFormBoundaryEt59FqhmJ380W0Rf
         ct = header:match('([^;]*)')
-		ngx.log(ngx.INFO, 'Content-Type: ' .. ct)
+		--ngx.log(ngx.INFO, 'Content-Type: ' .. ct)
 
 		if ct == 'multipart/form-data' then
 			return handle_multipart_formdata(self, path)
