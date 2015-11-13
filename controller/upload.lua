@@ -15,6 +15,14 @@ local function post_to(path)
         ngx.say(res)
         ngx.flush()
         ok, status, res = coroutine.resume(co, status, res)
+
+        if status == 200 then
+            status, info = request:query_file_info(res)
+            if info then
+                local cjson = require "cjson"
+                ngx.say(cjson.encode(info))
+            end
+        end
     else
         ngx.status = status
         ngx.say(res)

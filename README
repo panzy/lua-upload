@@ -63,8 +63,19 @@ Example
 
     upload file "123.txt"
     $ curl -v -0 -F "file=@123.txt" localhost:8080/upload
-    On success, the response will be file id, e.g.,
-    group1/M00/00/03/wKgBtFZFRs-EWHbPAAAAAIad-B8315.txt
+
+    Successful response:
+
+        < HTTP/1.1 200 OK
+        < Server: openresty/1.9.3.1
+        < Date: Fri, 13 Nov 2015 03:41:36 GMT
+        < Content-Type: text/html; charset=utf-8
+        < Content-Length: 150
+        < Connection: close
+        <
+        group1/M00/00/03/wKgBtFZFW_CEK3fKAAAAAFqCAvc139.txt
+        {"create_timestamp":1447386096,"crc32":1518469879,"file_size":4,"source_ip_addr":"192.168.1.180"}
+
 
     append file "456.txt" to a existing file
     $ curl -v -0 -F "file=@456.txt" localhost:8080/upload/group1/M00/00/02/wKgBtFY8BW2ETBr0AAAAAFqCAvc159.txt
