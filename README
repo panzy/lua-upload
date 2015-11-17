@@ -1,30 +1,22 @@
 This Lua application runs in OpenResty, letting you upload data to FastDFS.
 
 
-Requirements
-============
+# Requirements
 
-* fastdfs [ https://github.com/happyfish100/fastdfs ]
-* lua 5.1
-* OpenResty [ https://openresty.org/ ]
-* lua-resty-fastdfs [ https://github.com/panzy/lua-resty-fastdfs ]
-* ImageMagick [ https://github.com/leafo/magick ] required by thumb
-
-
-    Here's how to install magick on Fedora Linux:
-
-    $ sudo dnf install ImageMagick-devel
-    $ wget https://raw.githubusercontent.com/leafo/magick/master/magick/init.lua -O framework/magick.lua
+* [FastDFS](https://github.com/happyfish100/fastdfs)
+* Lua 5.1
+* [OpenResty](https://openresty.org/)
+* [lua-resty-fastdfs](https://github.com/panzy/lua-resty-fastdfs)
+* [ImageMagick](https://github.com/leafo/magick) // required by thumb
 
 
-How to run this app
-===================
+# How to run this app
 
-$ mkdir logs
-$ sudo /usr/local/openresty/nginx/sbin/nginx -p `pwd` -c nginx.conf
+    $ mkdir logs
+    $ sudo /usr/local/openresty/nginx/sbin/nginx -p `pwd` -c nginx.conf
 
 
-To upload, visit this page
+To test upload, visit this page
 
     http://localhost:8080/
 
@@ -33,31 +25,28 @@ or use curl:
     $ curl -v -0 -F "file=@123.txt" localhost:8080/upload
 
 
-Uploading API
--------------
+# Web API
 
-URL
+## Uploading
 
-    http://localhost:8080/upload[<path>]
+    POST http://localhost:8080/upload/[<fileid>]
 
-    * <path> is for appending data to existing file, e.g., 
+`fileid` is for appending data to existing file,
+`fileid = <group-name>/<file-name>`, e.g., 
 
-        /group1/M00/00/02/wKgBtFY8BW2ETBr0AAAAAFqCAvc159.txt
-
-Request Method
-
-    POST
+    group1/M00/00/02/wKgBtFY8BW2ETBr0AAAAAFqCAvc159.txt
 
 Accepted Headers
 
-    * Content-Type
-        - multipart/form-data
-        - application/octet-stream
-    * ext:<file-extension>
+* Content-Type
+    - multipart/form-data
+    - application/octet-stream
+* ext:<file-extension>
 
 Response
 
-    file id
+    <fileid>
+    <file-info-in-JSON>
 
 Example
 
@@ -90,24 +79,19 @@ Example
 It's possible for clients to get file id while the uploading is still in progress, see test/full-duplex/java.
 
 
-Downloading API
----------------
+## Downloading
 
-URL
-
-    http://localhost:8080/<group-name>/<file-name>
+    GET http://localhost:8080/<fileid>
 
 Example
 
     http://localhost:8080/group1/M00/00/02/wKgBtFY8BW2ETBr0AAAAAFqCAvc159.txt
 
 
-Querying API
-------------
+## Querying
 
-URL
 
-    http://localhost:8080/query/<group-name>/<file-name>
+    GET http://localhost:8080/query/<fileid>
 
 Example
 
@@ -117,6 +101,4 @@ Response
 
     {"create_timestamp":1446788879,"crc32":1518469879,"file_size":52,"source_ip_addr":"192.168.1.180"}
 
-    
-    
 
