@@ -1,5 +1,4 @@
-This Lua application runs in OpenResty, letting you upload data to FastDFS.
-
+A web front-end of FastDFS, running on OpenResty.
 
 # Requirements
 
@@ -41,7 +40,7 @@ Accepted Headers
 * Content-Type
     - multipart/form-data
     - application/octet-stream
-* ext:<file-extension>
+* ext: file extension, such as "jpg"
 
 Response
 
